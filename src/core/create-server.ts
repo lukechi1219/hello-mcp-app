@@ -39,6 +39,35 @@ export function createServer(options: CreateServerOptions): McpServer {
     }
   );
 
+  registerAppTool(
+    server,
+    'refresh-greetings',
+    {
+      title: 'Refresh Greetings',
+      description: 'Re-fetch the current greeting data with server timestamp',
+      inputSchema: {},
+      _meta: {
+        ui: {
+          resourceUri,
+          visibility: ['app'],
+        },
+      },
+    },
+    async () => {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              greetings,
+              refreshedAt: new Date().toISOString(),
+            }),
+          },
+        ],
+      };
+    }
+  );
+
   registerAppResource(
     server,
     'Hello World UI',

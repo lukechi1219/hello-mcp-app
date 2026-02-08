@@ -1,6 +1,7 @@
-import express from 'express';
+import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import type { Request, Response } from 'express';
 import cors from 'cors';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { createServer } from '../core/create-server.js';
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
@@ -15,34 +16,53 @@ async function loadHtml(): Promise<string> {
 }
 
 async function main() {
-  const app = express();
-  const port = process.env.PORT || 3000;
+  const port = parseInt(process.env.PORT ?? '3000', 10);
 
+  const app = createMcpExpressApp({ host: '0.0.0.0' });
   app.use(cors());
-  app.use(express.json());
 
-  const mcpServer = createServer({
-    htmlLoader: loadHtml,
+  app.all('/mcp', async (req: Request, res: Response) => {
+    const server = createServer({ htmlLoader: loadHtml });
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+
+    res.on('close', () => {
+      transport.close().catch(() => {});
+      server.close().catch(() => {});
+    });
+
+    try {
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (error) {
+      console.error('MCP error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: { code: -32603, message: 'Internal server error' },
+          id: null,
+        });
+      }
+    }
   });
 
-  app.get('/sse', async (req, res) => {
-    const transport = new SSEServerTransport('/message', res);
-    await mcpServer.connect(transport);
-  });
-
-  app.post('/message', async (req, res) => {
-    res.status(200).end();
-  });
-
-  app.get('/health', (_req, res) => {
+  app.get('/health', (_req: Request, res: Response) => {
     res.json({ status: 'ok', service: 'hello-mcp-app' });
   });
 
-  app.listen(port, () => {
-    console.log(`Hello MCP App listening on port ${port}`);
-    console.log(`MCP SSE endpoint: http://localhost:${port}/sse`);
+  const httpServer = app.listen(port, () => {
+    console.log(`Hello MCP App listening on http://localhost:${port}/mcp`);
     console.log(`Health check: http://localhost:${port}/health`);
   });
+
+  const shutdown = () => {
+    console.log('\nShutting down...');
+    httpServer.close(() => process.exit(0));
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 main().catch((error) => {

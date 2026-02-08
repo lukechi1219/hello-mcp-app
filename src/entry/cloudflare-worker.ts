@@ -1,4 +1,4 @@
-import { createMcpHandler } from 'agents/mcp';
+import { WorkerTransport } from 'agents/mcp';
 import { createServer } from '../core/create-server.js';
 
 // Full embedded HTML bundle (generated from dist/src/ui/mcp-app.html)
@@ -109,10 +109,31 @@ container holding the app. Specify either width or maxWidth, and either height o
 </html>
 `;
 
-const mcpServer = createServer({
-  htmlLoader: () => EMBEDDED_HTML,
-});
-
 export default {
-  fetch: createMcpHandler(mcpServer),
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname !== '/mcp') {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    const server = createServer({ htmlLoader: () => EMBEDDED_HTML });
+    const transport = new WorkerTransport({
+      sessionIdGenerator: undefined,
+    });
+
+    try {
+      await server.connect(transport);
+      return await transport.handleRequest(request);
+    } catch (error) {
+      console.error('MCP error:', error);
+      return new Response(JSON.stringify({
+        jsonrpc: '2.0',
+        error: { code: -32603, message: 'Internal server error' },
+        id: null,
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  },
 };

@@ -98,10 +98,24 @@ Cloudflare Workers cannot read files from disk at runtime, so the HTML must be e
 - No direct filesystem, network, or runtime dependencies
 - Can be imported by any entry point (stdio, HTTP, Workers)
 
+### Stateless Per-Request Architecture
+All HTTP entry points use **stateless mode**: a fresh `McpServer` + transport is created per request.
+- No shared server instance across requests
+- Compatible with serverless environments (Cloudflare Workers, Lambda)
+- Compatible with ChatGPT's connection model (no long-lived sessions)
+
 ### Multiple Entry Points
-- **stdio**: Local testing with MCP Inspector
-- **node-http**: Docker, Cloud Run, AWS, VPS deployments
-- **cloudflare-worker**: Serverless edge deployment
+- **stdio**: Local testing with MCP Inspector (single server instance, stateful)
+- **node-http**: Docker, Cloud Run, AWS, VPS — uses `StreamableHTTPServerTransport` (stateless, per-request)
+- **cloudflare-worker**: Serverless edge — uses `WorkerTransport` (stateless, per-request)
+
+### Cloudflare Workers is Stateless
+Cloudflare Workers 是 stateless 架構。每次 request 都是獨立的，沒有跨 request 的記憶體共享。
+- V8 isolate 可能被複用，但不應依賴跨 request 的狀態
+- 不能使用 `fs.readFile`，HTML 必須 embed 進原始碼
+- 不適合 SSE 長連線，適合 Streamable HTTP stateless 模式
+- 使用 `WorkerTransport` + per-request `createServer()` 確保真正的 stateless
+- **避免使用** `createMcpHandler` 搭配單一 server 實例（它內部只連線一次，會共用 transport）
 
 ### Single-File UI Bundle
 - Vite bundles `src/ui/mcp-app.html` into `dist/mcp-app.html`
@@ -154,24 +168,41 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "hello-world": {
-      "command": "npx",
-      "args": ["tsx", "src/entry/stdio.ts"],
-      "cwd": "/path/to/hello-mcp-app"
+      "command": "node",
+      "args": ["/Users/lukechimbp2023/Documents_local/idea/mcp-apps/hello-mcp-app/dist/entry/stdio.js"]
     }
   }
 }
 ```
-**Note:** Use `npx` to invoke `tsx` since it's a local dev dependency, not globally installed.
+**Note:** Use `node` with the absolute path to the compiled JS. No `cwd` needed since the path is absolute. Run `pnpm build` first to generate `dist/entry/stdio.js`.
 
 ### Claude Remote MCP Connect
 1. Deploy to any HTTPS endpoint (Cloud Run, Railway, Fly.io, etc.)
 2. Settings > Connectors > Add URL
 3. Example: `https://hello-mcp.example.com/mcp`
 
-### ChatGPT
-1. Same HTTPS endpoint as Claude
-2. Settings > Connectors > Advanced > Developer Mode
-3. Add MCP connector with your URL
+### ChatGPT (MCP Apps UI Supported)
+ChatGPT 透過 OpenAI Apps SDK 實作了 MCP Apps UI 標準，支援在聊天視窗中渲染互動式 UI（sandboxed iframe）。
+
+**連接步驟：**
+1. 部署到 HTTPS 端點（同 Claude）
+2. Settings → Connectors → Advanced → 啟用 Developer Mode
+3. 新增 MCP connector，輸入你的 URL（如 `https://hello-mcp-app.your-subdomain.workers.dev/mcp`）
+
+**支援的傳輸協定：** SSE、Streamable HTTP
+**支援的認證：** OAuth、No Auth
+**限制：** 不支援本地 MCP Server（必須 HTTPS）、Tool 數量建議 < 70
+
+**MCP Apps UI 運作機制：**
+- `registerAppResource` 註冊 HTML bundle 為 `ui://` 資源（MIME: `text/html;profile=mcp-app`）
+- Tool 的 `_meta.ui.resourceUri` 指向 UI 資源
+- ChatGPT 在 sandboxed iframe 中渲染，透過 JSON-RPC over postMessage 雙向通訊
+- 同一個 MCP Server 可同時支援 Claude、ChatGPT、VS Code、Goose 的 UI 渲染
+
+**參考資源：**
+- [OpenAI Apps SDK Quickstart](https://developers.openai.com/apps-sdk/quickstart/)
+- [OpenAI Apps SDK - Build MCP Server](https://developers.openai.com/apps-sdk/build/mcp-server)
+- [MCP Apps 官方 Blog](http://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/)
 
 ### Cloudflare Workers
 ```bash
@@ -287,9 +318,66 @@ export function createServer(options: { htmlLoader: () => string }) { ... }
 - `package.json` - packageManager field
 - `Dockerfile` - pnpm-specific build process
 
+### MCP Apps UI Lifecycle
+**Reference**: [SKILL.md](https://github.com/modelcontextprotocol/ext-apps/blob/main/plugins/mcp-apps/skills/create-mcp-app/SKILL.md)
+
+**Core Concept**: Tool + Resource linked by `_meta.ui.resourceUri`
+```
+Host calls tool → Server returns result → Host renders resource UI → UI receives result
+```
+
+**Client-Side Event Handlers** (register ALL before `app.connect()`):
+| Handler | Purpose |
+|---------|---------|
+| `ontoolinput` | Receive tool input arguments |
+| `ontoolresult` | Receive tool execution result |
+| `ontoolinputpartial` | Streaming progressive rendering (healed partial JSON) |
+| `onhostcontextchanged` | Theme, display mode, safe area insets |
+| `onteardown` | Cleanup resources before teardown |
+
+**Client-Side Actions**:
+| Method | Purpose |
+|--------|---------|
+| `app.callServerTool()` | UI initiates server tool call (bidirectional) |
+| `app.updateModelContext()` | Notify model of UI state changes |
+| `app.sendMessage()` | Background push message to model |
+| `app.sendLog()` | Debug logging to host |
+| `app.requestDisplayMode()` | Toggle fullscreen |
+
+**Host Styling** (via `onhostcontextchanged`):
+- `applyDocumentTheme(ctx.theme)` — dark/light mode
+- `applyHostStyleVariables(ctx.styles.variables)` — CSS variables (`--color-*`, `--font-*`, `--border-radius-*`)
+- `applyHostFonts(ctx.styles.css.fonts)` — host font families
+- `ctx.safeAreaInsets` — `{ top, right, bottom, left }` padding
+
+**Tool Visibility**:
+```typescript
+visibility: ["model", "app"]  // Default: both can access
+visibility: ["app"]           // UI-only (hidden from model)
+visibility: ["model"]         // Model-only (app cannot call)
+```
+
+**Performance**: Use `IntersectionObserver` to pause animations/polling when UI scrolls off-screen.
+
+### Transport Protocol Evolution
+**SSE (legacy)** → **Streamable HTTP (current recommended)**
+
+Streamable HTTP uses stateless per-request server creation, which is more compatible with ChatGPT and serverless environments:
+```typescript
+// Stateless: new server per request
+app.all("/mcp", async (req, res) => {
+  const server = createServer();
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  await server.connect(transport);
+  await transport.handleRequest(req, res, req.body);
+});
+```
+
 ## Resources
 
 - [MCP Documentation](https://modelcontextprotocol.io/)
 - [MCP App SDK](https://github.com/modelcontextprotocol/ext-apps)
+- [MCP Apps SKILL.md](https://github.com/modelcontextprotocol/ext-apps/blob/main/plugins/mcp-apps/skills/create-mcp-app/SKILL.md)
+- [OpenAI Apps SDK](https://developers.openai.com/apps-sdk/quickstart/)
 - [pnpm Documentation](https://pnpm.io/)
 - [Cloudflare Workers](https://developers.cloudflare.com/workers/)
