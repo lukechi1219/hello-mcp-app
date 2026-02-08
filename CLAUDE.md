@@ -160,10 +160,31 @@ docker run -p 3000:3000 hello-mcp
 curl http://localhost:3000/health
 ```
 
-## Deployment Targets
+## Deployment Methods
 
-### Claude Desktop (Local)
-Add to `claude_desktop_config.json`:
+This app supports 5 deployment methods across 3 entry points:
+
+| Method | Entry Point | Transport | Mode | Best For |
+|--------|-------------|-----------|------|----------|
+| Claude Desktop (stdio) | `stdio.ts` | stdio | Stateful | Local development & testing |
+| Node.js HTTP | `node-http.ts` | Streamable HTTP | Stateless | VPS, Cloud VM, local HTTP |
+| Docker | `node-http.ts` | Streamable HTTP | Stateless | Cloud Run, AWS ECS, containers |
+| Cloudflare Workers | `cloudflare-worker.ts` | WorkerTransport | Stateless | Serverless edge deployment |
+| ngrok tunnel | `node-http.ts` | Streamable HTTP | Stateless | Expose local for ChatGPT testing |
+
+### 1. Claude Desktop (Local stdio)
+
+Runs as a local child process managed by Claude Desktop. No network required.
+
+```bash
+pnpm build
+ls dist/entry/stdio.js
+```
+
+Edit Claude Desktop config:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
 ```json
 {
   "mcpServers": {
@@ -174,24 +195,118 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
-**Note:** Use `node` with the absolute path to the compiled JS. No `cwd` needed since the path is absolute. Run `pnpm build` first to generate `dist/entry/stdio.js`.
 
-### Claude Remote MCP Connect
-1. Deploy to any HTTPS endpoint (Cloud Run, Railway, Fly.io, etc.)
+**Note:** Use `node` with the absolute path to the compiled JS. Run `pnpm build` first.
+
+### 2. Node.js HTTP Server
+
+Express v5 server with Streamable HTTP transport. Suitable for VPS, Cloud VM, or local testing.
+
+```bash
+# Development (auto-builds UI)
+pnpm dev:http
+
+# Production
+pnpm build
+pnpm start
+```
+
+**Endpoints:**
+- MCP: `http://localhost:3000/mcp`
+- Health: `http://localhost:3000/health`
+
+**Environment variables:** `PORT` (default: `3000`)
+
+**Verify:**
+```bash
+curl http://localhost:3000/health
+
+curl -X POST http://localhost:3000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}},"id":1}'
+```
+
+### 3. Docker
+
+Multi-stage build with Node.js 22 Alpine.
+
+```bash
+docker build -t hello-mcp .
+docker run -p 3000:3000 hello-mcp
+curl http://localhost:3000/health
+```
+
+**Deploy to cloud container platforms:**
+```bash
+# Google Cloud Run
+gcloud run deploy hello-mcp --source . --port 3000 --allow-unauthenticated
+
+# AWS App Runner (via ECR)
+docker tag hello-mcp:latest <account-id>.dkr.ecr.<region>.amazonaws.com/hello-mcp:latest
+docker push <account-id>.dkr.ecr.<region>.amazonaws.com/hello-mcp:latest
+
+# Railway
+railway up
+
+# Fly.io
+fly launch && fly deploy
+```
+
+### 4. Cloudflare Workers
+
+Serverless edge deployment. HTML is embedded into the worker source at build time.
+
+**Prerequisites:** Cloudflare account, `wrangler` CLI authenticated (`wrangler login`)
+
+```bash
+wrangler login        # First time only
+pnpm deploy:cf        # Build UI → embed HTML → deploy
+```
+
+**What happens during `pnpm deploy:cf`:**
+1. `pnpm build:ui` — Vite builds single-file HTML bundle (~370KB)
+2. `pnpm embed:html` — Embeds HTML into `cloudflare-worker.ts`
+3. `wrangler deploy` — Compiles and deploys to Cloudflare edge
+
+**Output URL:** `https://hello-mcp-app.<your-subdomain>.workers.dev/mcp`
+
+### 5. ngrok Tunnel (for Development)
+
+Expose local HTTP server via HTTPS for testing with ChatGPT (which requires HTTPS).
+
+```bash
+# Terminal 1: Start local server
+pnpm dev:http
+
+# Terminal 2: Expose via ngrok
+ngrok http 3000
+```
+
+Use the ngrok HTTPS URL (e.g. `https://abc123.ngrok-free.app/mcp`) as MCP connector URL.
+
+## Connecting to AI Clients
+
+### Claude Desktop (Remote)
+1. Deploy to any HTTPS endpoint
+2. Settings > Developer > Edit Config
+3. Add URL: `https://your-server.com/mcp`
+
+### Claude Web (Remote MCP Connect)
+1. Deploy to any HTTPS endpoint
 2. Settings > Connectors > Add URL
-3. Example: `https://hello-mcp.example.com/mcp`
+3. Enter: `https://your-server.com/mcp`
 
 ### ChatGPT (MCP Apps UI Supported)
 ChatGPT 透過 OpenAI Apps SDK 實作了 MCP Apps UI 標準，支援在聊天視窗中渲染互動式 UI（sandboxed iframe）。
 
 **連接步驟：**
-1. 部署到 HTTPS 端點（同 Claude）
-2. Settings → Connectors → Advanced → 啟用 Developer Mode
-3. 新增 MCP connector，輸入你的 URL（如 `https://hello-mcp-app.your-subdomain.workers.dev/mcp`）
+1. Deploy to HTTPS (Cloudflare Workers, Cloud Run, ngrok, etc.)
+2. Settings → Connectors → Advanced → Enable Developer Mode
+3. Add MCP connector with your URL
 
-**支援的傳輸協定：** SSE、Streamable HTTP
-**支援的認證：** OAuth、No Auth
-**限制：** 不支援本地 MCP Server（必須 HTTPS）、Tool 數量建議 < 70
+**Supported:** SSE, Streamable HTTP | **Auth:** OAuth, No Auth
+**Limitation:** No local MCP servers (must be HTTPS), Tool count < 70 recommended
 
 **MCP Apps UI 運作機制：**
 - `registerAppResource` 註冊 HTML bundle 為 `ui://` 資源（MIME: `text/html;profile=mcp-app`）
@@ -204,11 +319,13 @@ ChatGPT 透過 OpenAI Apps SDK 實作了 MCP Apps UI 標準，支援在聊天視
 - [OpenAI Apps SDK - Build MCP Server](https://developers.openai.com/apps-sdk/build/mcp-server)
 - [MCP Apps 官方 Blog](http://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/)
 
-### Cloudflare Workers
-```bash
-pnpm deploy:cf
-# Generates URL: https://hello-mcp-app.your-subdomain.workers.dev
-```
+### VS Code (Insiders)
+1. Deploy to any HTTPS endpoint, or use local stdio
+2. Configure in VS Code MCP settings
+
+### Goose
+1. Deploy to any HTTPS endpoint
+2. Add MCP server URL in Goose settings
 
 ## Common Tasks
 
