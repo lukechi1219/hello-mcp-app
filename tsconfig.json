@@ -22,5 +22,5 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/entry/cloudflare-worker.ts"]
+  "exclude": ["node_modules", "dist"]
 }

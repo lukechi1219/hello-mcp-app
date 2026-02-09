@@ -107,17 +107,9 @@ case $choice in
         echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
         echo ""
 
-        # Build UI
-        echo -e "${YELLOW}Building UI...${NC}"
-        pnpm build:ui
-
-        # Build TypeScript (stdio and node-http)
-        echo -e "${YELLOW}Building TypeScript...${NC}"
+        # Full build (UI + TypeScript)
+        echo -e "${YELLOW}Building...${NC}"
         pnpm build
-
-        # Build Cloudflare Worker (embed HTML)
-        echo -e "${YELLOW}Preparing Cloudflare Worker...${NC}"
-        pnpm build:cf
 
         echo ""
         echo -e "${GREEN}✅ Build complete!${NC}"
@@ -125,13 +117,11 @@ case $choice in
         echo "Built files:"
         echo "  - dist/entry/stdio.js (stdio mode)"
         echo "  - dist/entry/node-http.js (HTTP server)"
-        echo "  - src/entry/cloudflare-worker.ts (Cloudflare Workers, with embedded HTML)"
         echo "  - dist/src/ui/mcp-app.html (UI bundle)"
         echo ""
         echo "Next steps:"
         echo "  - Test stdio: ./startup.sh (option 1)"
         echo "  - Test HTTP: ./startup.sh (option 2)"
-        echo "  - Deploy to Cloudflare: pnpm deploy:cf"
         echo "  - Build Docker: docker build -t hello-mcp ."
         echo ""
         ;;

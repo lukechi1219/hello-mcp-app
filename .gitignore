@@ -40,10 +40,6 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 
-# Cloudflare Workers
-.wrangler/
-wrangler.toml.local
-
 # OS files
 Thumbs.db
 Desktop.ini

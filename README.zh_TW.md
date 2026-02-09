@@ -19,15 +19,15 @@ pnpm build
 
 ## 部署方式
 
-本 App 支援 5 種部署方式，涵蓋 3 個進入點：
+本 App 支援 3 種部署方式，涵蓋 2 個進入點：
 
 | 方式 | 進入點 | 傳輸協定 | 模式 | 適用場景 |
 |------|--------|----------|------|----------|
 | [Claude Desktop (stdio)](#1-claude-desktop本機-stdio) | `stdio.ts` | stdio | 有狀態 | 本機開發與測試 |
 | [Node.js HTTP](#2-nodejs-http-伺服器) | `node-http.ts` | Streamable HTTP | 無狀態 | VPS、雲端 VM、本機 HTTP |
 | [Docker](#3-docker) | `node-http.ts` | Streamable HTTP | 無狀態 | Cloud Run、AWS ECS、容器平台 |
-| [Cloudflare Workers](#4-cloudflare-workers) | `cloudflare-worker.ts` | WorkerTransport | 無狀態 | Serverless 邊緣部署 |
-| [ngrok 通道](#5-ngrok-通道開發用) | `node-http.ts` | Streamable HTTP | 無狀態 | 將本機伺服器暴露給 ChatGPT 測試 |
+
+> **提示：** 使用 [ngrok](https://ngrok.com/) 將本機 HTTP 伺服器透過 HTTPS 暴露，供 ChatGPT 測試：`ngrok http 3000`
 
 ### 1. Claude Desktop（本機 stdio）
 
@@ -144,56 +144,6 @@ fly deploy
 
 **部署後的 MCP 端點：** `https://your-service-url.com/mcp`
 
-### 4. Cloudflare Workers
-
-Serverless 邊緣部署。HTML 在建置時嵌入到 worker 原始碼中。
-
-**前置需求：**
-- Cloudflare 帳號
-- `wrangler` CLI 已認證（`wrangler login`）
-
-**步驟：**
-
-```bash
-# 1. 登入 Cloudflare（僅首次需要）
-wrangler login
-
-# 2. 建置並部署（建置 UI → 嵌入 HTML → 部署）
-pnpm deploy:cf
-```
-
-**`pnpm deploy:cf` 執行流程：**
-1. `pnpm build:ui` — Vite 建置單檔 HTML bundle（~370KB）
-2. `pnpm embed:html` — `scripts/embed-html.js` 將 HTML 嵌入 `cloudflare-worker.ts`
-3. `wrangler deploy` — Wrangler 編譯並部署到 Cloudflare 邊緣網路
-
-**輸出 URL：** `https://hello-mcp-app.<your-subdomain>.workers.dev/mcp`
-
-**自訂網域（選用）：**
-
-編輯 `wrangler.toml`：
-```toml
-routes = [
-  { pattern = "hello-mcp.example.com/*", zone_name = "example.com" }
-]
-```
-
-### 5. ngrok 通道（開發用）
-
-透過 HTTPS 暴露本機 HTTP 伺服器，用於 ChatGPT 測試（ChatGPT 要求 HTTPS）。
-
-**步驟：**
-
-```bash
-# 終端機 1：啟動本機伺服器
-pnpm dev:http
-
-# 終端機 2：透過 ngrok 暴露
-ngrok http 3000
-```
-
-**使用 ngrok HTTPS URL**（例如 `https://abc123.ngrok-free.app/mcp`）作為 MCP 連接器 URL。
-
 ## 連接 AI 客戶端
 
 部署到 HTTPS 端點後，可連接任何 MCP 相容的客戶端：
@@ -214,7 +164,7 @@ ngrok http 3000
 
 需要 HTTPS 端點。支援 MCP Apps UI 渲染（與 Claude 相同的互動式 UI）。
 
-1. 部署到 HTTPS（Cloudflare Workers、Cloud Run、ngrok 等）
+1. 部署到 HTTPS（Cloud Run、ngrok 等）
 2. Settings > Connectors > Advanced > 啟用 Developer Mode
 3. 新增 MCP connector，輸入你的 URL
 4. 在對話中要求使用該工具
@@ -242,14 +192,12 @@ hello-mcp-app/
 │   │   └── create-server.ts # MCP 伺服器工廠（tools + resources）
 │   ├── entry/               # 平台專屬進入點
 │   │   ├── stdio.ts         # 本機測試（有狀態）
-│   │   ├── node-http.ts     # Express v5 + Streamable HTTP（無狀態）
-│   │   └── cloudflare-worker.ts  # Cloudflare Workers（無狀態）
+│   │   └── node-http.ts     # Express v5 + Streamable HTTP（無狀態）
 │   └── ui/                  # iPhone 風格歡迎畫面
 │       ├── mcp-app.html     # 主要 UI 結構
 │       ├── mcp-app.ts       # MCP App SDK 客戶端（完整生命週期）
 │       └── styles.css       # 動畫 + Host 主題 fallback
 ├── Dockerfile               # 多階段 Node.js 建置
-├── wrangler.toml            # Cloudflare Workers 設定
 └── package.json             # pnpm scripts 與相依套件
 ```
 
@@ -280,18 +228,15 @@ pnpm dev              # 透過 stdio 本機測試
 pnpm dev:http         # HTTP 伺服器測試（埠 3000）
 pnpm build            # 完整建置（UI + TypeScript）
 pnpm build:ui         # 僅建置 UI bundle
-pnpm build:cf         # Cloudflare Workers 建置
 pnpm start            # 啟動正式環境 HTTP 伺服器
-pnpm deploy:cf        # 部署到 Cloudflare Workers
-pnpm embed:html       # 將 HTML 嵌入 cloudflare-worker.ts
 ```
 
 ## 技術棧
 
-- **執行環境**: Node.js 18+、Cloudflare Workers
+- **執行環境**: Node.js 18+
 - **語言**: TypeScript（ES2022、strict mode）
 - **MCP SDK**: `@modelcontextprotocol/sdk` + `@modelcontextprotocol/ext-apps`
-- **傳輸**: Streamable HTTP（Node.js）、WorkerTransport（Cloudflare）
+- **傳輸**: Streamable HTTP
 - **伺服器**: Express v5 搭配 `createMcpExpressApp`
 - **建置**: Vite + `vite-plugin-singlefile`（單檔 HTML bundle）
 - **套件管理**: pnpm

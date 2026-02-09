@@ -19,15 +19,15 @@ pnpm build
 
 ## Deployment Methods
 
-This app supports 5 deployment methods across 3 entry points:
+This app supports 3 deployment methods across 2 entry points:
 
 | Method | Entry Point | Transport | Mode | Best For |
 |--------|-------------|-----------|------|----------|
 | [Claude Desktop (stdio)](#1-claude-desktop-local-stdio) | `stdio.ts` | stdio | Stateful | Local development & testing |
 | [Node.js HTTP](#2-nodejs-http-server) | `node-http.ts` | Streamable HTTP | Stateless | VPS, Cloud VM, local HTTP |
 | [Docker](#3-docker) | `node-http.ts` | Streamable HTTP | Stateless | Cloud Run, AWS ECS, any container platform |
-| [Cloudflare Workers](#4-cloudflare-workers) | `cloudflare-worker.ts` | WorkerTransport | Stateless | Serverless edge deployment |
-| [ngrok tunnel](#5-ngrok-tunnel-for-development) | `node-http.ts` | Streamable HTTP | Stateless | Expose local server for ChatGPT testing |
+
+> **Tip:** Use [ngrok](https://ngrok.com/) to expose your local HTTP server via HTTPS for testing with ChatGPT: `ngrok http 3000`
 
 ### 1. Claude Desktop (Local stdio)
 
@@ -144,56 +144,6 @@ fly deploy
 
 **MCP endpoint after deploy:** `https://your-service-url.com/mcp`
 
-### 4. Cloudflare Workers
-
-Serverless edge deployment. HTML is embedded into the worker source at build time.
-
-**Prerequisites:**
-- Cloudflare account
-- `wrangler` CLI authenticated (`wrangler login`)
-
-**Steps:**
-
-```bash
-# 1. Login to Cloudflare (first time only)
-wrangler login
-
-# 2. Build and deploy (builds UI → embeds HTML → deploys)
-pnpm deploy:cf
-```
-
-**What happens during `pnpm deploy:cf`:**
-1. `pnpm build:ui` — Vite builds single-file HTML bundle (~370KB)
-2. `pnpm embed:html` — `scripts/embed-html.js` embeds HTML into `cloudflare-worker.ts`
-3. `wrangler deploy` — Wrangler compiles and deploys to Cloudflare edge
-
-**Output URL:** `https://hello-mcp-app.<your-subdomain>.workers.dev/mcp`
-
-**Custom domain (optional):**
-
-Edit `wrangler.toml`:
-```toml
-routes = [
-  { pattern = "hello-mcp.example.com/*", zone_name = "example.com" }
-]
-```
-
-### 5. ngrok Tunnel (for Development)
-
-Expose your local HTTP server via HTTPS for testing with ChatGPT (which requires HTTPS).
-
-**Steps:**
-
-```bash
-# Terminal 1: Start local server
-pnpm dev:http
-
-# Terminal 2: Expose via ngrok
-ngrok http 3000
-```
-
-**Use the ngrok HTTPS URL** (e.g. `https://abc123.ngrok-free.app/mcp`) as MCP connector URL.
-
 ## Connecting to AI Clients
 
 After deploying to an HTTPS endpoint, connect to any MCP-compatible client:
@@ -214,7 +164,7 @@ After deploying to an HTTPS endpoint, connect to any MCP-compatible client:
 
 Requires HTTPS endpoint. Supports MCP Apps UI rendering (same interactive UI as Claude).
 
-1. Deploy to HTTPS (Cloudflare Workers, Cloud Run, ngrok, etc.)
+1. Deploy to HTTPS (Cloud Run, ngrok, etc.)
 2. Settings > Connectors > Advanced > Enable Developer Mode
 3. Add MCP connector with your URL
 4. In conversation, ask to use the tool
@@ -242,14 +192,12 @@ hello-mcp-app/
 │   │   └── create-server.ts # MCP server factory (tools + resources)
 │   ├── entry/               # Platform-specific entry points
 │   │   ├── stdio.ts         # Local testing (stateful)
-│   │   ├── node-http.ts     # Express v5 + Streamable HTTP (stateless)
-│   │   └── cloudflare-worker.ts  # Cloudflare Workers (stateless)
+│   │   └── node-http.ts     # Express v5 + Streamable HTTP (stateless)
 │   └── ui/                  # iPhone-style welcome screen
 │       ├── mcp-app.html     # Main UI structure
 │       ├── mcp-app.ts       # MCP App SDK client (full lifecycle)
 │       └── styles.css       # Animations + host theme fallbacks
 ├── Dockerfile               # Multi-stage Node.js build
-├── wrangler.toml            # Cloudflare Workers config
 └── package.json             # pnpm scripts & dependencies
 ```
 
@@ -280,18 +228,15 @@ pnpm dev              # Test locally via stdio
 pnpm dev:http         # Test HTTP server (port 3000)
 pnpm build            # Full build (UI + TypeScript)
 pnpm build:ui         # Build UI bundle only
-pnpm build:cf         # Build for Cloudflare Workers
 pnpm start            # Start production HTTP server
-pnpm deploy:cf        # Deploy to Cloudflare Workers
-pnpm embed:html       # Embed HTML into cloudflare-worker.ts
 ```
 
 ## Tech Stack
 
-- **Runtime**: Node.js 18+, Cloudflare Workers
+- **Runtime**: Node.js 18+
 - **Language**: TypeScript (ES2022, strict mode)
 - **MCP SDK**: `@modelcontextprotocol/sdk` + `@modelcontextprotocol/ext-apps`
-- **Transport**: Streamable HTTP (Node.js), WorkerTransport (Cloudflare)
+- **Transport**: Streamable HTTP
 - **Server**: Express v5 with `createMcpExpressApp`
 - **Build**: Vite + `vite-plugin-singlefile` (single-file HTML bundle)
 - **Package Manager**: pnpm

@@ -6,18 +6,14 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build:ui": "cross-env INPUT=src/ui/mcp-app.html vite build",
-    "embed:html": "node scripts/embed-html.js",
     "dev": "pnpm build:ui && tsx src/entry/stdio.ts",
     "dev:http": "pnpm build:ui && tsx src/entry/node-http.ts",
     "build": "pnpm build:ui && tsc",
-    "build:cf": "pnpm build:ui && pnpm embed:html",
-    "start": "node dist/entry/node-http.js",
-    "deploy:cf": "pnpm build:cf && wrangler deploy"
+    "start": "node dist/entry/node-http.js"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.0.1",
     "@modelcontextprotocol/sdk": "1.25.2",
-    "agents": "^0.3.10",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "zod": "^3.24.1"
@@ -31,7 +27,6 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
-    "vite-plugin-singlefile": "^2.0.3",
-    "wrangler": "^3.100.0"
+    "vite-plugin-singlefile": "^2.0.3"
   }
 }

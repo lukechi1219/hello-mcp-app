@@ -19,8 +19,7 @@ hello-mcp-app/
 │   │   └── create-server.ts  # MCP server factory
 │   ├── entry/             # Platform-specific entry points
 │   │   ├── stdio.ts       # Local testing via stdio transport
-│   │   ├── node-http.ts   # Express + Streamable HTTP (Docker/Cloud)
-│   │   └── cloudflare-worker.ts  # Cloudflare Workers deployment
+│   │   └── node-http.ts   # Express + Streamable HTTP (Docker/Cloud)
 │   └── ui/                # iPhone-style welcome screen
 │       ├── mcp-app.html   # Main UI structure
 │       ├── mcp-app.ts     # MCP App SDK client
@@ -30,7 +29,6 @@ hello-mcp-app/
 ├── tsconfig.json          # TypeScript configuration
 ├── vite.config.ts         # Vite bundler configuration
 ├── Dockerfile             # Node.js deployment (uses pnpm)
-├── wrangler.toml          # Cloudflare Workers config
 └── .npmrc                 # pnpm configuration
 ```
 
@@ -49,9 +47,6 @@ pnpm install
 # Build UI bundle
 pnpm build:ui
 
-# Embed full HTML into Cloudflare Worker
-pnpm embed:html
-
 # Test locally via stdio transport
 pnpm dev
 
@@ -61,18 +56,12 @@ pnpm dev:http
 # Full build (UI + TypeScript compilation for stdio/HTTP)
 pnpm build
 
-# Build Cloudflare Worker (UI + embed HTML)
-pnpm build:cf
-
 # Start production server
 pnpm start
 ```
 
 ### Deployment Commands
 ```bash
-# Deploy to Cloudflare Workers (builds UI + embeds HTML + deploys)
-pnpm deploy:cf
-
 # Build Docker image
 docker build -t hello-mcp .
 
@@ -80,42 +69,22 @@ docker build -t hello-mcp .
 docker run -p 3000:3000 hello-mcp
 ```
 
-### HTML Embedding for Cloudflare Workers
-
-Cloudflare Workers cannot read files from disk at runtime, so the HTML must be embedded in the source code.
-
-**Process:**
-1. `pnpm build:ui` - Build the UI bundle (366KB single-file HTML)
-2. `pnpm embed:html` - Run `scripts/embed-html.js` to embed HTML into `cloudflare-worker.ts`
-3. The script properly escapes the HTML for TypeScript template literals
-
-**Note:** The `cloudflare-worker.ts` file is excluded from regular `tsc` builds because it's 363KB and only needed for Cloudflare deployment. Wrangler builds it separately.
-
 ## Architecture Principles
 
 ### Cloud-Agnostic Core
 - `src/core/` contains no platform-specific code
 - No direct filesystem, network, or runtime dependencies
-- Can be imported by any entry point (stdio, HTTP, Workers)
+- Can be imported by any entry point (stdio, HTTP)
 
 ### Stateless Per-Request Architecture
 All HTTP entry points use **stateless mode**: a fresh `McpServer` + transport is created per request.
 - No shared server instance across requests
-- Compatible with serverless environments (Cloudflare Workers, Lambda)
+- Compatible with serverless environments (Lambda, etc.)
 - Compatible with ChatGPT's connection model (no long-lived sessions)
 
 ### Multiple Entry Points
 - **stdio**: Local testing with MCP Inspector (single server instance, stateful)
 - **node-http**: Docker, Cloud Run, AWS, VPS — uses `StreamableHTTPServerTransport` (stateless, per-request)
-- **cloudflare-worker**: Serverless edge — uses `WorkerTransport` (stateless, per-request)
-
-### Cloudflare Workers is Stateless
-Cloudflare Workers 是 stateless 架構。每次 request 都是獨立的，沒有跨 request 的記憶體共享。
-- V8 isolate 可能被複用，但不應依賴跨 request 的狀態
-- 不能使用 `fs.readFile`，HTML 必須 embed 進原始碼
-- 不適合 SSE 長連線，適合 Streamable HTTP stateless 模式
-- 使用 `WorkerTransport` + per-request `createServer()` 確保真正的 stateless
-- **避免使用** `createMcpHandler` 搭配單一 server 實例（它內部只連線一次，會共用 transport）
 
 ### Single-File UI Bundle
 - Vite bundles `src/ui/mcp-app.html` into `dist/mcp-app.html`
@@ -162,15 +131,13 @@ curl http://localhost:3000/health
 
 ## Deployment Methods
 
-This app supports 5 deployment methods across 3 entry points:
+This app supports 3 deployment methods across 2 entry points:
 
 | Method | Entry Point | Transport | Mode | Best For |
 |--------|-------------|-----------|------|----------|
 | Claude Desktop (stdio) | `stdio.ts` | stdio | Stateful | Local development & testing |
 | Node.js HTTP | `node-http.ts` | Streamable HTTP | Stateless | VPS, Cloud VM, local HTTP |
 | Docker | `node-http.ts` | Streamable HTTP | Stateless | Cloud Run, AWS ECS, containers |
-| Cloudflare Workers | `cloudflare-worker.ts` | WorkerTransport | Stateless | Serverless edge deployment |
-| ngrok tunnel | `node-http.ts` | Streamable HTTP | Stateless | Expose local for ChatGPT testing |
 
 ### 1. Claude Desktop (Local stdio)
 
@@ -253,25 +220,7 @@ railway up
 fly launch && fly deploy
 ```
 
-### 4. Cloudflare Workers
-
-Serverless edge deployment. HTML is embedded into the worker source at build time.
-
-**Prerequisites:** Cloudflare account, `wrangler` CLI authenticated (`wrangler login`)
-
-```bash
-wrangler login        # First time only
-pnpm deploy:cf        # Build UI → embed HTML → deploy
-```
-
-**What happens during `pnpm deploy:cf`:**
-1. `pnpm build:ui` — Vite builds single-file HTML bundle (~370KB)
-2. `pnpm embed:html` — Embeds HTML into `cloudflare-worker.ts`
-3. `wrangler deploy` — Compiles and deploys to Cloudflare edge
-
-**Output URL:** `https://hello-mcp-app.<your-subdomain>.workers.dev/mcp`
-
-### 5. ngrok Tunnel (for Development)
+### ngrok Tunnel (for Development)
 
 Expose local HTTP server via HTTPS for testing with ChatGPT (which requires HTTPS).
 
@@ -301,7 +250,7 @@ Use the ngrok HTTPS URL (e.g. `https://abc123.ngrok-free.app/mcp`) as MCP connec
 ChatGPT 透過 OpenAI Apps SDK 實作了 MCP Apps UI 標準，支援在聊天視窗中渲染互動式 UI（sandboxed iframe）。
 
 **連接步驟：**
-1. Deploy to HTTPS (Cloudflare Workers, Cloud Run, ngrok, etc.)
+1. Deploy to HTTPS (Cloud Run, ngrok, etc.)
 2. Settings → Connectors → Advanced → Enable Developer Mode
 3. Add MCP connector with your URL
 
@@ -375,33 +324,7 @@ pnpm add -D <package>
 ### Dependency Version Management
 **Critical Finding**: Using `"latest"` for MCP SDK packages can cause version conflicts.
 
-**What Happened:**
-- `agents@0.3.10` depends on `@modelcontextprotocol/sdk@1.25.2`
-- Using `"latest"` installed SDK 1.26.0
-- TypeScript detected incompatible `McpServer` types between versions
-- Blocked Cloudflare Workers deployment
-
-**Solution:**
-Pin all MCP-related packages to compatible versions:
-```json
-{
-  "@modelcontextprotocol/sdk": "1.25.2",
-  "@modelcontextprotocol/ext-apps": "^1.0.1",
-  "agents": "^0.3.10"
-}
-```
-
 **Lesson**: For mission-critical dependencies (especially SDK packages), pin exact versions to ensure reproducible builds and type compatibility.
-
-### Cloudflare Workers HTML Embedding
-**Challenge**: Cloudflare Workers can't read files from disk at runtime.
-
-**Solutions Explored:**
-1. **Inline Placeholder** (Development): Simple HTML string for testing
-2. **Full Bundle Embedding** (Production): Embed entire built HTML
-3. **Build-time Generation** (Best): Generate worker during build process
-
-**Current Approach**: Embed built HTML directly in source for production deployment.
 
 ### Multi-Entry Point Architecture
 **Success Pattern**: Cloud-agnostic core with platform-specific adapters.
@@ -409,7 +332,7 @@ Pin all MCP-related packages to compatible versions:
 **Benefits:**
 - Single codebase for all deployment modes
 - Easy testing (stdio) before production deployment
-- Platform flexibility (Docker, Cloudflare, serverless)
+- Platform flexibility (Docker, serverless)
 - Clean separation of concerns
 
 **Key Pattern:**
@@ -420,7 +343,6 @@ export function createServer(options: { htmlLoader: () => string }) { ... }
 // Adapters (platform-specific)
 // stdio.ts - reads from disk
 // node-http.ts - reads from disk
-// cloudflare-worker.ts - uses embedded string
 ```
 
 ### pnpm Migration Success
@@ -497,4 +419,3 @@ app.all("/mcp", async (req, res) => {
 - [MCP Apps SKILL.md](https://github.com/modelcontextprotocol/ext-apps/blob/main/plugins/mcp-apps/skills/create-mcp-app/SKILL.md)
 - [OpenAI Apps SDK](https://developers.openai.com/apps-sdk/quickstart/)
 - [pnpm Documentation](https://pnpm.io/)
-- [Cloudflare Workers](https://developers.cloudflare.com/workers/)
