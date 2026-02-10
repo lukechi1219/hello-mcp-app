@@ -143,6 +143,7 @@ async function initializeMcpApp(): Promise<void> {
       if (serverGreetings) {
         activeGreetings = serverGreetings;
         log('info', `Updated greetings from server: ${activeGreetings.length} languages`);
+        initializeWelcomeScreen();
       }
     };
 
@@ -226,7 +227,6 @@ async function initializeMcpApp(): Promise<void> {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  initializeWelcomeScreen();
   setupVisibilityObserver();
   initializeMcpApp();
 });
