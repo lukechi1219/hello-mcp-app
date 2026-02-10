@@ -221,6 +221,30 @@ async function initializeMcpApp(): Promise<void> {
         }
       });
     }
+
+    const serverTimeElement = document.getElementById('server-time');
+    const getTimeButton = document.getElementById('get-time-btn');
+
+    async function fetchServerTime(): Promise<void> {
+      try {
+        const result = await app.callServerTool({ name: 'get-server-time', arguments: {} });
+        const time = result.content?.find((c) => c.type === 'text')?.text;
+        if (serverTimeElement) {
+          serverTimeElement.textContent = time ?? '[ERROR]';
+        }
+      } catch (error) {
+        log('error', `Failed to get server time: ${error}`);
+        if (serverTimeElement) {
+          serverTimeElement.textContent = '[ERROR]';
+        }
+      }
+    }
+
+    if (getTimeButton) {
+      getTimeButton.addEventListener('click', fetchServerTime);
+    }
+
+    fetchServerTime();
   } catch (error) {
     log('error', `App initialization error: ${error}`);
   }

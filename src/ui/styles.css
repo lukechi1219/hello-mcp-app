@@ -71,6 +71,23 @@ body {
   letter-spacing: 0.01em;
 }
 
+.server-time {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  color: var(--color-text-secondary, var(--text-secondary));
+  opacity: 0.5;
+}
+
+.server-time span {
+  letter-spacing: 0.02em;
+}
+
 .version-badge {
   position: absolute;
   bottom: 1rem;

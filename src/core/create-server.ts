@@ -70,6 +70,31 @@ export function createServer(distDir: string = DEFAULT_DIST_DIR): McpServer {
     }
   );
 
+  registerAppTool(
+    server,
+    'get-server-time',
+    {
+      title: 'Get Server Time',
+      description: 'Returns the current server time',
+      inputSchema: {},
+      _meta: {
+        ui: {
+          resourceUri,
+        },
+      },
+    },
+    async () => {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: new Date().toISOString(),
+          },
+        ],
+      };
+    }
+  );
+
   registerAppResource(
     server,
     'Hello World UI',

@@ -405,6 +405,15 @@ visibility: ["app"]           // UI-only (hidden from model)
 visibility: ["model"]         // Model-only (app cannot call)
 ```
 
+**Visibility Gotcha — `callServerTool` and `visibility: ["app"]`**:
+Tools with `visibility: ["app"]` are excluded from the server's `tools/list` response.
+When the UI calls `app.callServerTool()`, it goes through the MCP protocol which checks
+`tools/list` first — so `visibility: ["app"]` tools will fail with `-32602: Tool not found`.
+
+**Workaround**: If a tool needs to be callable from the UI via `callServerTool()`, do NOT
+restrict visibility to `["app"]` only. Use the default (no visibility field) so it appears
+in `tools/list` and is accessible to both model and app.
+
 **Performance**: Use `IntersectionObserver` to pause animations/polling when UI scrolls off-screen.
 
 ### Transport Protocol Evolution

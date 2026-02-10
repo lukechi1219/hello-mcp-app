@@ -1,11 +1,6 @@
 import { defineConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
-const input = process.env.INPUT;
-if (!input) {
-  throw new Error('INPUT environment variable is required (e.g. INPUT=src/ui/mcp-app.html)');
-}
-
 const isDev = process.env.NODE_ENV === 'development';
 
 export default defineConfig({
@@ -16,7 +11,7 @@ export default defineConfig({
     emptyOutDir: false,
     sourcemap: isDev ? 'inline' : false,
     rollupOptions: {
-      input,
+      input: 'src/ui/mcp-app.html',
       output: {
         entryFileNames: '[name].js',
         assetFileNames: '[name].[ext]'

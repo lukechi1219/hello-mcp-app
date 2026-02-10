@@ -5,8 +5,8 @@
   "description": "Multilingual MCP App with iPhone-style fade animations",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "build": "tsc --noEmit && tsc -p tsconfig.server.json && cross-env INPUT=src/ui/mcp-app.html vite build",
-    "start": "concurrently \"cross-env NODE_ENV=development INPUT=src/ui/mcp-app.html vite build --watch\" \"tsx watch src/entry/node-http.ts\"",
+    "build": "tsc --noEmit && tsc -p tsconfig.server.json && vite build",
+    "start": "concurrently \"cross-env NODE_ENV=development vite build --watch\" \"tsx watch src/entry/node-http.ts\"",
     "start:stdio": "pnpm build && node dist/entry/stdio.js",
     "start:prod": "node dist/entry/node-http.js"
   },
