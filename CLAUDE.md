@@ -26,7 +26,8 @@ hello-mcp-app/
 │       └── styles.css     # Fade-cycling animations
 ├── dist/                  # Build output (generated)
 ├── package.json           # Dependencies and scripts
-├── tsconfig.json          # TypeScript configuration
+├── tsconfig.json          # Client type checking (noEmit, bundler resolution)
+├── tsconfig.server.json   # Server declarations (NodeNext, emitDeclarationOnly)
 ├── vite.config.ts         # Vite bundler configuration
 ├── Dockerfile             # Node.js deployment (uses pnpm)
 └── .npmrc                 # pnpm configuration
@@ -44,21 +45,29 @@ pnpm install
 # Quick start with interactive menu
 ./startup.sh
 
-# Build UI bundle
-pnpm build:ui
+# Dev server with concurrent Vite watch + tsx watch (port 3000)
+pnpm start
 
-# Test locally via stdio transport
-pnpm dev
-
-# Test HTTP server (port 3000)
-pnpm dev:http
-
-# Full build (UI + TypeScript compilation for stdio/HTTP)
+# Full build (type-check → declarations → UI bundle)
 pnpm build
 
-# Start production server
-pnpm start
+# Build and run stdio transport
+pnpm start:stdio
+
+# Production server (requires pnpm build first)
+pnpm start:prod
 ```
+
+### Build Pipeline (Dual tsconfig Strategy)
+```
+pnpm build = tsc --noEmit          → type-check all src/**/*
+           + tsc -p tsconfig.server → emit .d.ts for core + entry
+           + vite build             → bundle UI into single HTML
+```
+
+- `tsconfig.json` — type checking only (`noEmit`, `moduleResolution: bundler`, includes DOM types)
+- `tsconfig.server.json` — server JS + declarations (`NodeNext`, emits to `dist/`)
+- Vite handles UI bundling into single HTML; `emptyOutDir: false` preserves tsc output
 
 ### Deployment Commands
 ```bash
@@ -72,8 +81,8 @@ docker run -p 3000:3000 hello-mcp
 ## Architecture Principles
 
 ### Cloud-Agnostic Core
-- `src/core/` contains no platform-specific code
-- No direct filesystem, network, or runtime dependencies
+- `src/core/` contains the MCP server factory and greeting data
+- Uses `import.meta.dirname` for HTML path resolution (works in both compiled and tsx modes)
 - Can be imported by any entry point (stdio, HTTP)
 
 ### Stateless Per-Request Architecture
@@ -87,7 +96,7 @@ All HTTP entry points use **stateless mode**: a fresh `McpServer` + transport is
 - **node-http**: Docker, Cloud Run, AWS, VPS — uses `StreamableHTTPServerTransport` (stateless, per-request)
 
 ### Single-File UI Bundle
-- Vite bundles `src/ui/mcp-app.html` into `dist/mcp-app.html`
+- Vite bundles `src/ui/mcp-app.html` into `dist/src/ui/mcp-app.html`
 - All CSS, JS, and assets inlined for easy deployment
 - Served as MCP resource via `registerAppResource`
 
@@ -111,13 +120,13 @@ All HTTP entry points use **stateless mode**: a fresh `McpServer` + transport is
 
 ### Local Testing (stdio)
 ```bash
-pnpm dev
+pnpm start:stdio
 # Connect via MCP Inspector or Claude Desktop
 ```
 
 ### HTTP Server Testing
 ```bash
-pnpm dev:http
+pnpm start
 # Test endpoint: http://localhost:3000/mcp
 # Health check: http://localhost:3000/health
 ```
@@ -170,12 +179,12 @@ Edit Claude Desktop config:
 Express v5 server with Streamable HTTP transport. Suitable for VPS, Cloud VM, or local testing.
 
 ```bash
-# Development (auto-builds UI)
-pnpm dev:http
+# Development (concurrent Vite watch + tsx watch)
+pnpm start
 
 # Production
 pnpm build
-pnpm start
+pnpm start:prod
 ```
 
 **Endpoints:**
@@ -226,7 +235,7 @@ Expose local HTTP server via HTTPS for testing with ChatGPT (which requires HTTP
 
 ```bash
 # Terminal 1: Start local server
-pnpm dev:http
+pnpm start
 
 # Terminal 2: Expose via ngrok
 ngrok http 3000
@@ -281,12 +290,12 @@ ChatGPT 透過 OpenAI Apps SDK 實作了 MCP Apps UI 標準，支援在聊天視
 ### Adding a New Language
 1. Edit `src/core/greetings.ts`
 2. Add new entry to `GREETINGS` array
-3. Rebuild UI: `pnpm build:ui`
+3. Rebuild: `pnpm build`
 
 ### Modifying UI Animation
 1. Edit `src/ui/styles.css` (animation timing)
 2. Edit `src/ui/mcp-app.ts` (greeting logic)
-3. Rebuild: `pnpm build:ui`
+3. Rebuild: `pnpm build` (or use `pnpm start` for live reload)
 
 ### Adding New Dependencies
 ```bash
@@ -302,11 +311,11 @@ pnpm add -D <package>
 ### "Cannot find module" errors
 - Ensure imports use `.js` extensions
 - Run `pnpm install` to verify dependencies
-- Check `tsconfig.json` paths configuration
+- Check `tsconfig.server.json` for server module resolution
 
 ### UI not updating
-- Run `pnpm build:ui` to rebuild
-- Check `dist/mcp-app.html` exists
+- Run `pnpm build` to rebuild
+- Check `dist/src/ui/mcp-app.html` exists
 - Restart the server
 
 ### Docker build fails
@@ -337,12 +346,12 @@ pnpm add -D <package>
 
 **Key Pattern:**
 ```typescript
-// Core (platform-agnostic)
-export function createServer(options: { htmlLoader: () => string }) { ... }
+// Core (self-contained, reads HTML via import.meta.dirname)
+export function createServer(): McpServer { ... }
 
-// Adapters (platform-specific)
-// stdio.ts - reads from disk
-// node-http.ts - reads from disk
+// Entry points (thin adapters)
+// stdio.ts - createServer() + StdioServerTransport
+// node-http.ts - createServer() + StreamableHTTPServerTransport
 ```
 
 ### pnpm Migration Success

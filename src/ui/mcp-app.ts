@@ -24,6 +24,7 @@ const layoutVariations = [
 
 let animationTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let isAnimationPaused = false;
+let isInitialized = false;
 let activeGreetings: Greeting[] = greetings;
 let currentDisplayMode: 'inline' | 'fullscreen' = 'inline';
 
@@ -38,9 +39,18 @@ function log(level: LogLevel, data: string | Record<string, unknown>): void {
   connectedApp?.sendLog({ level, data }).catch(() => {});
 }
 
+let showGreeting: (() => void) | null = null;
+
 function initializeWelcomeScreen(): void {
+  if (isInitialized) {
+    showGreeting?.();
+    return;
+  }
+
   const container = document.querySelector('.greeting-wrapper') as HTMLElement;
   if (!container) return;
+
+  isInitialized = true;
 
   const greetingElement = document.createElement('div');
   greetingElement.className = 'greeting';
@@ -54,7 +64,7 @@ function initializeWelcomeScreen(): void {
 
   let currentIndex = 0;
 
-  function showGreeting(): void {
+  showGreeting = function (): void {
     if (isAnimationPaused) return;
 
     const greeting = activeGreetings[currentIndex];
@@ -73,10 +83,10 @@ function initializeWelcomeScreen(): void {
 
       animationTimeoutId = setTimeout(() => {
         currentIndex = (currentIndex + 1) % activeGreetings.length;
-        showGreeting();
+        showGreeting!();
       }, FADE_DURATION_MS);
     }, FADE_DURATION_MS + HOLD_DURATION_MS);
-  }
+  };
 
   showGreeting();
 }
