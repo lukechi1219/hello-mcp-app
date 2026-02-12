@@ -24,6 +24,7 @@ const layoutVariations = [
 
 let animationTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let isAnimationPaused = false;
+let isInitialized = false;
 let activeGreetings: Greeting[] = greetings;
 let currentDisplayMode: 'inline' | 'fullscreen' = 'inline';
 
@@ -38,9 +39,18 @@ function log(level: LogLevel, data: string | Record<string, unknown>): void {
   connectedApp?.sendLog({ level, data }).catch(() => {});
 }
 
+let showGreeting: (() => void) | null = null;
+
 function initializeWelcomeScreen(): void {
+  if (isInitialized) {
+    showGreeting?.();
+    return;
+  }
+
   const container = document.querySelector('.greeting-wrapper') as HTMLElement;
   if (!container) return;
+
+  isInitialized = true;
 
   const greetingElement = document.createElement('div');
   greetingElement.className = 'greeting';
@@ -54,7 +64,7 @@ function initializeWelcomeScreen(): void {
 
   let currentIndex = 0;
 
-  function showGreeting(): void {
+  showGreeting = function (): void {
     if (isAnimationPaused) return;
 
     const greeting = activeGreetings[currentIndex];
@@ -73,10 +83,10 @@ function initializeWelcomeScreen(): void {
 
       animationTimeoutId = setTimeout(() => {
         currentIndex = (currentIndex + 1) % activeGreetings.length;
-        showGreeting();
+        showGreeting!();
       }, FADE_DURATION_MS);
     }, FADE_DURATION_MS + HOLD_DURATION_MS);
-  }
+  };
 
   showGreeting();
 }
@@ -133,6 +143,7 @@ async function initializeMcpApp(): Promise<void> {
       if (serverGreetings) {
         activeGreetings = serverGreetings;
         log('info', `Updated greetings from server: ${activeGreetings.length} languages`);
+        initializeWelcomeScreen();
       }
     };
 
@@ -210,13 +221,36 @@ async function initializeMcpApp(): Promise<void> {
         }
       });
     }
+
+    const serverTimeElement = document.getElementById('server-time');
+    const getTimeButton = document.getElementById('get-time-btn');
+
+    async function fetchServerTime(): Promise<void> {
+      try {
+        const result = await app.callServerTool({ name: 'get-server-time', arguments: {} });
+        const time = result.content?.find((c) => c.type === 'text')?.text;
+        if (serverTimeElement) {
+          serverTimeElement.textContent = time ?? '[ERROR]';
+        }
+      } catch (error) {
+        log('error', `Failed to get server time: ${error}`);
+        if (serverTimeElement) {
+          serverTimeElement.textContent = '[ERROR]';
+        }
+      }
+    }
+
+    if (getTimeButton) {
+      getTimeButton.addEventListener('click', fetchServerTime);
+    }
+
+    fetchServerTime();
   } catch (error) {
     log('error', `App initialization error: ${error}`);
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  initializeWelcomeScreen();
   setupVisibilityObserver();
   initializeMcpApp();
 });

@@ -1,12 +1,14 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { greetings } from './greetings.js';
 
-export interface CreateServerOptions {
-  htmlLoader: () => Promise<string> | string;
-}
+const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_DIST_DIR = path.join(currentDirectory, '../..');
 
-export function createServer(options: CreateServerOptions): McpServer {
+export function createServer(distDir: string = DEFAULT_DIST_DIR): McpServer {
   const server = new McpServer({
     name: 'hello-mcp-app',
     version: '1.0.0',
@@ -68,6 +70,31 @@ export function createServer(options: CreateServerOptions): McpServer {
     }
   );
 
+  registerAppTool(
+    server,
+    'get-server-time',
+    {
+      title: 'Get Server Time',
+      description: 'Returns the current server time',
+      inputSchema: {},
+      _meta: {
+        ui: {
+          resourceUri,
+        },
+      },
+    },
+    async () => {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: new Date().toISOString(),
+          },
+        ],
+      };
+    }
+  );
+
   registerAppResource(
     server,
     'Hello World UI',
@@ -77,7 +104,10 @@ export function createServer(options: CreateServerOptions): McpServer {
       description: 'iPhone-style multilingual welcome screen with fade-cycling animation',
     },
     async () => {
-      const htmlContent = await options.htmlLoader();
+      const htmlContent = await fs.readFile(
+        path.join(distDir, 'dist/src/ui/mcp-app.html'),
+        'utf-8'
+      );
       return {
         contents: [
           {

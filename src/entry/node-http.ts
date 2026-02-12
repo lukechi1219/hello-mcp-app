@@ -3,17 +3,6 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { Request, Response } from 'express';
 import cors from 'cors';
 import { createServer } from '../core/create-server.js';
-import { readFile } from 'fs/promises';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const currentDirectory = dirname(fileURLToPath(import.meta.url));
-const projectRoot = join(currentDirectory, '../..');
-
-async function loadHtml(): Promise<string> {
-  const htmlPath = join(projectRoot, 'dist/src/ui/mcp-app.html');
-  return await readFile(htmlPath, 'utf-8');
-}
 
 async function main() {
   const port = parseInt(process.env.PORT ?? '3000', 10);
@@ -22,7 +11,7 @@ async function main() {
   app.use(cors());
 
   app.all('/mcp', async (req: Request, res: Response) => {
-    const server = createServer({ htmlLoader: loadHtml });
+    const server = createServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     });
