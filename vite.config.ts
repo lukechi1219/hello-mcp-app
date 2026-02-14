@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite';
+import preact from '@preact/preset-vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
 const isDev = process.env.NODE_ENV === 'development';
 
 export default defineConfig({
-  plugins: [viteSingleFile()],
+  plugins: [preact(), viteSingleFile()],
   build: {
     target: 'esnext',
     outDir: 'dist',

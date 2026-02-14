@@ -10,6 +10,8 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "strict": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "skipLibCheck": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
