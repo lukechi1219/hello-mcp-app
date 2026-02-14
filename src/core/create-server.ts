@@ -2,8 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { registerAppTool, registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { greetings } from './greetings.js';
+import { getBudgetData, formatBudgetSummary, BudgetDataResponseSchema } from './budget-data.js';
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DIST_DIR = path.join(currentDirectory, '../..');
@@ -91,6 +93,32 @@ export function createServer(distDir: string = DEFAULT_DIST_DIR): McpServer {
             text: new Date().toISOString(),
           },
         ],
+      };
+    }
+  );
+
+  registerAppTool(
+    server,
+    'get-budget-data',
+    {
+      title: 'Get Budget Data',
+      description:
+        'Returns budget configuration with 24 months of historical allocations and industry benchmarks by company stage',
+      inputSchema: {},
+      outputSchema: BudgetDataResponseSchema as never,
+      _meta: { ui: { resourceUri } },
+    },
+    async (): Promise<CallToolResult> => {
+      const response = getBudgetData();
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: formatBudgetSummary(response),
+          },
+        ],
+        structuredContent: response,
       };
     }
   );

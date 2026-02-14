@@ -28,6 +28,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* When budget view is active, reset body background so .budget-view controls it */
+body:has(.budget-view) {
+  background: none;
+  overflow: auto;
+}
+
 .welcome-container {
   text-align: center;
   position: relative;
