@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Multilingual MCP App with iPhone-style fade animations",
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.34.9",
   "scripts": {
     "build": "tsc --noEmit && tsc -p tsconfig.server.json && vite build",
     "start": "concurrently \"cross-env NODE_ENV=development vite build --watch\" \"tsx watch src/entry/node-http.ts\"",
@@ -11,24 +11,24 @@
     "start:prod": "node dist/entry/node-http.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/ext-apps": "^1.0.1",
-    "@modelcontextprotocol/sdk": "1.25.2",
-    "chart.js": "^4.4.0",
-    "cors": "^2.8.5",
-    "express": "^5.2.1",
-    "preact": "^10.28.3",
-    "zod": "^3.24.1"
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "chart.js": "^4.6.1",
+    "cors": "^2.8.6",
+    "express": "^5.3.0",
+    "preact": "^10.29.8",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@preact/preset-vite": "^2.10.3",
-    "@types/cors": "^2.8.17",
+    "@preact/preset-vite": "^2.10.6",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/node": "^22.10.5",
-    "concurrently": "^9.1.2",
+    "@types/node": "^22.20.5",
+    "concurrently": "^9.2.5",
     "cross-env": "^7.0.3",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.5",
-    "vite-plugin-singlefile": "^2.0.3"
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.5",
+    "vite-plugin-singlefile": "^2.3.4"
   }
 }
